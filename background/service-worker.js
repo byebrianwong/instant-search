@@ -1,3 +1,24 @@
+// ── Context menu ────────────────────────────────────────────────────────────
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: 'instant-search-lookup',
+    title: 'Instant Search: "%s"',
+    contexts: ['selection']
+  });
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'instant-search-lookup' && info.selectionText && tab?.id) {
+    chrome.tabs.sendMessage(tab.id, {
+      type: 'INSTANT_SEARCH_CONTEXT_MENU',
+      text: info.selectionText.trim()
+    });
+  }
+});
+
+// ── Settings & lookup ───────────────────────────────────────────────────────
+
 const DEFAULT_SETTINGS = {
   provider: 'dictionary',
   geminiApiKey: '',

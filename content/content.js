@@ -599,8 +599,6 @@
     });
   }
 
-  // ── Event handlers ──────────────────────────────────────────────────────────
-
   function isInsideTooltip(el) {
     if (!currentHost) return false;
     return currentHost === el || currentHost.contains(el);
@@ -613,7 +611,21 @@
     return false;
   }
 
-  let lastScrollY = window.scrollY;
+  // ── Context menu handler ───────────────────────────────────────────────────
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type !== 'INSTANT_SEARCH_CONTEXT_MENU') return;
+
+    let text = (message.text || '').trim();
+    if (text.length < 1 || text.length > 200) return;
+
+    const rect = getSelectionRect();
+    if (!rect) return;
+
+    createTooltip(text, rect);
+  });
+
+  // ── Event handlers ──────────────────────────────────────────────────────────
 
   document.addEventListener('dblclick', (e) => {
     if (isInsideTooltip(e.target)) return;
@@ -625,7 +637,6 @@
     const rect = getSelectionRect();
     if (!rect) return;
 
-    lastScrollY = window.scrollY;
     createTooltip(word, rect);
   }, true);
 
@@ -642,10 +653,4 @@
     }
   }, true);
 
-  window.addEventListener('scroll', () => {
-    if (!currentHost) return;
-    if (Math.abs(window.scrollY - lastScrollY) > 50) {
-      removeTooltip();
-    }
-  }, { passive: true });
 })();
