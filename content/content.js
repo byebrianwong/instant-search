@@ -3,6 +3,8 @@
 
   let currentHost = null;
   let currentShadow = null;
+  let currentWord = null;
+  let currentResult = null;
 
   const TOOLTIP_WIDTH = 380;
   const MARGIN = 8;
@@ -87,6 +89,43 @@
     .is-close:hover {
       background: #f1f3f4;
       color: #333;
+    }
+
+    .is-save {
+      appearance: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #999;
+      padding: 0;
+      margin: 0;
+      line-height: 1;
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: background 120ms, color 120ms;
+    }
+
+    .is-save svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .is-save:hover {
+      background: #f1f3f4;
+      color: #e8a000;
+    }
+
+    .is-save.is-saved {
+      color: #e8a000;
+    }
+
+    .is-save.is-saved:hover {
+      color: #cc8c00;
     }
 
     /* ── Body ── */
@@ -305,6 +344,21 @@
       flex-shrink: 0;
     }
 
+    .is-saved-link {
+      display: block;
+      text-align: center;
+      padding: 6px 14px 10px;
+      font-size: 12px;
+      color: #888;
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 120ms;
+    }
+
+    .is-saved-link:hover {
+      color: #1a73e8;
+    }
+
     /* ── Dark mode ── */
     @media (prefers-color-scheme: dark) {
       .is-tooltip {
@@ -319,6 +373,10 @@
       .is-phonetic { color: #888; }
       .is-close { color: #888; }
       .is-close:hover { background: #3c3c3c; color: #ddd; }
+      .is-save { color: #888; }
+      .is-save:hover { background: #3c3c3c; color: #f0c040; }
+      .is-save.is-saved { color: #f0c040; }
+      .is-save.is-saved:hover { color: #daa520; }
 
       .is-ai-section {
         background: #1e2030;
@@ -349,11 +407,17 @@
       .is-btn-google { background: #1e3a5f; border-color: #2962ff55; color: #8ab4f8; }
       .is-btn-google:hover { background: #264a7a; }
 
+      .is-saved-link { color: #666; }
+      .is-saved-link:hover { color: #8ab4f8; }
+
       .is-body::-webkit-scrollbar-thumb { background: #555; }
     }
   `;
 
   // ── SVG Icons ───────────────────────────────────────────────────────────────
+
+  const ICON_BOOKMARK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
+  const ICON_BOOKMARK_FILLED = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
 
   const ICON_WIKI = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>`;
 
@@ -366,6 +430,7 @@
       <div class="is-tooltip">
         <div class="is-header">
           <span class="is-word">${esc(word)}</span>
+          <button class="is-save" aria-label="Save" data-word="${esc(word)}">${ICON_BOOKMARK}</button>
           <button class="is-close" aria-label="Close">&times;</button>
         </div>
         <div class="is-body">
@@ -389,6 +454,7 @@
         <div class="is-tooltip">
           <div class="is-header">
             <span class="is-word">${esc(word)}</span>
+            <button class="is-save" aria-label="Save" data-word="${esc(word)}">${ICON_BOOKMARK}</button>
             <button class="is-close" aria-label="Close">&times;</button>
           </div>
           <div class="is-body">
@@ -462,6 +528,7 @@
         <div class="is-header">
           <span class="is-word">${esc(word)}</span>
           ${phoneticHtml}
+          <button class="is-save" aria-label="Save" data-word="${esc(word)}">${ICON_BOOKMARK}</button>
           <button class="is-close" aria-label="Close">&times;</button>
         </div>
         <div class="is-body">
@@ -473,6 +540,7 @@
         <div class="is-actions">
           ${buildActionButtons(word)}
         </div>
+        <a class="is-saved-link" data-open-saved>View saved words</a>
       </div>
     `;
   }
@@ -544,6 +612,8 @@
       currentHost.remove();
       currentHost = null;
       currentShadow = null;
+      currentWord = null;
+      currentResult = null;
     }
   }
 
@@ -569,15 +639,41 @@
 
     currentHost = host;
     currentShadow = shadow;
+    currentWord = word;
+    currentResult = null;
 
     wireEvents(shadow);
+
+    // Check if already saved and update bookmark icon
+    chrome.runtime.sendMessage({ type: 'IS_SAVED', text: word }, (res) => {
+      if (!currentHost || currentHost !== host) return;
+      if (res?.saved) {
+        const saveBtn = shadow.querySelector('.is-save');
+        if (saveBtn) {
+          saveBtn.classList.add('is-saved');
+          saveBtn.innerHTML = ICON_BOOKMARK_FILLED;
+        }
+      }
+    });
 
     chrome.runtime.sendMessage(
       { type: 'INSTANT_SEARCH_LOOKUP', word },
       (result) => {
         if (!currentHost || currentHost !== host) return;
+        currentResult = result;
         container.innerHTML = buildResult(word, result);
         wireEvents(shadow);
+        // Re-check saved state after re-render
+        chrome.runtime.sendMessage({ type: 'IS_SAVED', text: word }, (res) => {
+          if (!currentHost || currentHost !== host) return;
+          if (res?.saved) {
+            const saveBtn = shadow.querySelector('.is-save');
+            if (saveBtn) {
+              saveBtn.classList.add('is-saved');
+              saveBtn.innerHTML = ICON_BOOKMARK_FILLED;
+            }
+          }
+        });
       }
     );
   }
@@ -597,6 +693,43 @@
         window.open(btn.dataset.url, '_blank', 'noopener');
       });
     });
+
+    const saveBtn = shadow.querySelector('.is-save');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const word = currentWord;
+        const isSaved = saveBtn.classList.contains('is-saved');
+
+        if (isSaved) {
+          chrome.runtime.sendMessage({ type: 'UNSAVE_WORD', text: word }, () => {
+            saveBtn.classList.remove('is-saved');
+            saveBtn.innerHTML = ICON_BOOKMARK;
+          });
+        } else {
+          const entry = {
+            text: word,
+            savedAt: Date.now(),
+            ai: currentResult?.ai || null,
+            dictionary: currentResult?.dictionary || null
+          };
+          chrome.runtime.sendMessage({ type: 'SAVE_WORD', entry }, () => {
+            saveBtn.classList.add('is-saved');
+            saveBtn.innerHTML = ICON_BOOKMARK_FILLED;
+          });
+        }
+      });
+    }
+
+    const savedLink = shadow.querySelector('[data-open-saved]');
+    if (savedLink) {
+      savedLink.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const url = chrome.runtime.getURL('saved/saved.html');
+        window.open(url, '_blank', 'noopener');
+      });
+    }
   }
 
   function isInsideTooltip(el) {

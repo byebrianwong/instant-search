@@ -201,6 +201,40 @@ async function handleLookup(word) {
   };
 }
 
+// ── Saved words (chrome.storage.local) ──────────────────────────────────────
+
+async function getSavedWords() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get({ savedWords: [] }, (r) => resolve(r.savedWords));
+  });
+}
+
+async function saveWord(entry) {
+  const saved = await getSavedWords();
+  // Replace if same text already saved
+  const idx = saved.findIndex((w) => w.text === entry.text);
+  if (idx !== -1) saved.splice(idx, 1);
+  saved.unshift(entry);
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ savedWords: saved }, () => resolve({ success: true }));
+  });
+}
+
+async function unsaveWord(text) {
+  const saved = await getSavedWords();
+  const filtered = saved.filter((w) => w.text !== text);
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ savedWords: filtered }, () => resolve({ success: true }));
+  });
+}
+
+async function isWordSaved(text) {
+  const saved = await getSavedWords();
+  return saved.some((w) => w.text === text);
+}
+
+// ── Message router ──────────────────────────────────────────────────────────
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'INSTANT_SEARCH_LOOKUP') {
     handleLookup(message.word).then(sendResponse);
@@ -216,6 +250,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.sync.set(message.settings, () => {
       sendResponse({ success: true });
     });
+    return true;
+  }
+
+  if (message.type === 'SAVE_WORD') {
+    saveWord(message.entry).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === 'UNSAVE_WORD') {
+    unsaveWord(message.text).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === 'IS_SAVED') {
+    isWordSaved(message.text).then((saved) => sendResponse({ saved }));
+    return true;
+  }
+
+  if (message.type === 'GET_SAVED_WORDS') {
+    getSavedWords().then((words) => sendResponse({ words }));
     return true;
   }
 });

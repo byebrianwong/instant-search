@@ -66,6 +66,12 @@ saveBtn.addEventListener('click', () => {
   });
 });
 
+// Open saved words page
+document.getElementById('view-saved').addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: chrome.runtime.getURL('saved/saved.html') });
+});
+
 function showStatus(message, color) {
   statusEl.textContent = message;
   statusEl.style.color = color;
